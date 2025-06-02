@@ -180,7 +180,7 @@ Examples:
 • Create a quiz based on the uploaded textbook chapter  
 • Focus on advanced programming topics from the documents"
                 className={cn(
-                  'w-full rounded-xl rounded-b-none px-4 py-3 bg-[#202329] border-none text-white placeholder:text-gray-400 resize-none focus-visible:ring-0 focus-visible:ring-offset-0 focus:bg-[#202329]',
+                  'w-full rounded-xl rounded-b-none placeholder:opacity-30 px-4 py-3 bg-[#202329] border-none text-white placeholder:text-gray-400 resize-none focus-visible:ring-0 focus-visible:ring-offset-0 focus:bg-[#202329]',
                   'min-h-[72px]'
                 )}
                 ref={textareaRef}
@@ -350,7 +350,7 @@ Examples:
                   ) : (
                     <ArrowRight
                       className={cn(
-                        'w-4 h-4 transition-opacity duration-200',
+                        'w-4 h-4 transition-opacity duration-200 text-white',
                         canGenerate ? 'opacity-100' : 'opacity-30'
                       )}
                     />

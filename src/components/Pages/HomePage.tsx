@@ -21,6 +21,7 @@ import { useRouter } from "next/router";
 // Import the new minimal component
 import { EduQuestPrompt } from "../EduQuestPrompt";
 import PromptSuggestions from "../PromptSuggestions";
+import { HomeSpinner } from "../ui/home-spinner";
 
 const HomePage: React.FC = () => {
   const router = useRouter();
@@ -41,7 +42,7 @@ const HomePage: React.FC = () => {
   return (
     <div className="mx-auto flex min-h-screen w-screen items-center justify-start bg-[#13151A] text-white">
       {/* Session Sidebar */}
-     
+
       {/* Sidebar */}
       <div className="h-[100vh] w-[20%] bg-[#13151A]">
         <div className="mx-4 mt-5 flex flex-col items-center justify-center space-y-4">
@@ -67,10 +68,9 @@ const HomePage: React.FC = () => {
             <span>Achievements</span>
           </button>
           <SessionSidebar
-        onClose={() => setSidebarOpen(false)}
-        onSessionSelect={handleSessionSelect}
-      />
-
+            onClose={() => setSidebarOpen(false)}
+            onSessionSelect={handleSessionSelect}
+          />
         </div>
       </div>
 
@@ -146,16 +146,22 @@ function HomeContent({
       setSessionId(sessionId);
       console.log("Session created with ID:", sessionId);
       console.log("Questions data being passed:", result.questions);
-      
+
       // Verify session was created
       const { getSessionById } = useSessionStore.getState();
       const createdSession = getSessionById(sessionId);
-      console.log("Session verification:", createdSession ? "Success" : "Failed");
-      console.log("Created session questions count:", createdSession?.questions?.length || 0);
-      
+      console.log(
+        "Session verification:",
+        createdSession ? "Success" : "Failed",
+      );
+      console.log(
+        "Created session questions count:",
+        createdSession?.questions?.length || 0,
+      );
+
       if (createdSession) {
         toast.success("Questions generated successfully! Redirecting...");
-        
+
         // Use Next.js router for navigation with immediate redirect
         setTimeout(() => {
           router.push(`/interactive/${sessionId}`);
@@ -194,7 +200,6 @@ function HomeContent({
               </p>
             </div>
           </div>
-          {(isLoading || loading) && <Loader />}
         </div>
       </div>
 
@@ -217,7 +222,7 @@ function HomeContent({
       )}
       {/* Main Content - Centered and Minimal */}
       <div className="relative flex min-h-[calc(100vh-130px)] flex-col items-center justify-center overflow-hidden p-6">
-        {!prompt && (
+        {!prompt && !loading && !jsonData && (
           <div className="mx-auto flex max-w-4xl items-center justify-center">
             <PromptSuggestions
               onSuggestionClick={(suggestion) => {
@@ -267,6 +272,7 @@ function HomeContent({
           />
         </div>
       </div>
+      <HomeSpinner isLoading={loading} />
     </div>
   );
 }

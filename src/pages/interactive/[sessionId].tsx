@@ -29,14 +29,13 @@ export default function InteractiveSession() {
     } = useSessionStore();
 
     const [session, setSession] = useState<any>(null);
-    const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
     const [isAnalyzing, setIsAnalyzing] = useState(false);
     const [showResults, setShowResults] = useState(false);
     const [isLoading, setIsLoading] = useState(true);
     const [sessionNotFound, setSessionNotFound] = useState(false);
 
+    // Simplified session loading effect
     useEffect(() => {
-        // Handle both sessionId and uuid for backward compatibility
         const id = sessionId || router.query.uuid;
         
         if (!id || typeof id !== 'string') {
@@ -44,34 +43,24 @@ export default function InteractiveSession() {
             return;
         }
 
-        // Wait for store to be hydrated before attempting to load session
         if (!isHydrated) {
-            console.log('Store not yet hydrated, waiting...');
             return;
         }
 
-        console.log('Store hydrated, attempting to load session:', id);
-        console.log('Available sessions:', sessions.length);
-        
+        console.log('Loading session:', id);
         const foundSession = getSessionById(id);
         
         if (foundSession) {
             setSession(foundSession);
-            // Only set current session if it's different to avoid infinite updates
-            if (currentSession?.id !== id) {
-                setCurrentSession(id);
-            }
+            setCurrentSession(id);
             setIsLoading(false);
             setSessionNotFound(false);
-            console.log('Session loaded successfully:', foundSession);
             
             // If session is already completed, show results
             if (foundSession.analysis && foundSession.isCompleted) {
                 setShowResults(true);
             }
         } else {
-            console.log('Session not found in store. Checking localStorage fallback...');
-            
             // Fallback: Try to load from localStorage directly
             try {
                 const storedData = localStorage.getItem('eduquest-sessions');
@@ -82,13 +71,9 @@ export default function InteractiveSession() {
                     
                     if (foundStoredSession) {
                         setSession(foundStoredSession);
-                        // Only set current session if it's different
-                        if (currentSession?.id !== id) {
-                            setCurrentSession(id);
-                        }
+                        setCurrentSession(id);
                         setIsLoading(false);
                         setSessionNotFound(false);
-                        console.log('Session loaded from localStorage fallback:', foundStoredSession);
                         
                         if (foundStoredSession.analysis && foundStoredSession.isCompleted) {
                             setShowResults(true);
@@ -100,24 +85,20 @@ export default function InteractiveSession() {
                 console.error('Error loading from localStorage:', error);
             }
             
-            // Session truly not found
-            console.log('Session not found anywhere');
             setIsLoading(false);
             setSessionNotFound(true);
         }
+    }, [sessionId, router.query.uuid, isHydrated, getSessionById, setCurrentSession]);
 
-    }, [sessionId, router.query.uuid, isHydrated]); // Removed sessions and currentSession from dependencies
-
-    // Separate effect to sync session data when user answers change
+    // Re-sync session when store updates
     useEffect(() => {
-        if (session && session.id) {
+        if (session?.id && isHydrated) {
             const updatedSession = getSessionById(session.id);
-            if (updatedSession && updatedSession.userAnswers.length !== session.userAnswers.length) {
-                console.log('Syncing session data due to answer changes');
+            if (updatedSession) {
                 setSession(updatedSession);
             }
         }
-    }, [session?.id, session?.userAnswers?.length, getSessionById]);
+    }, [sessions, session?.id, getSessionById, isHydrated]);
 
     // Loading state
     if (isLoading) {
@@ -127,12 +108,6 @@ export default function InteractiveSession() {
                     <div className="animate-spin rounded-full h-16 w-16 border-2 border-white border-t-transparent mx-auto mb-4"></div>
                     <p className="text-lg mb-2">Loading session...</p>
                     <p className="text-sm text-gray-400 mb-4">Please wait while we load your quiz data</p>
-                    <div className="text-xs text-gray-500 space-y-1">
-                        <p>Session ID: {sessionId || 'Not provided'}</p>
-                        <p>Store Hydrated: {isHydrated ? 'Yes' : 'No'}</p>
-                        <p>Available Sessions: {sessions.length}</p>
-                        <p>Current Session: {currentSession?.id || 'None'}</p>
-                    </div>
                 </div>
             </div>
         );
@@ -146,14 +121,8 @@ export default function InteractiveSession() {
                     <FiAlertCircle size={64} className="text-red-500 mx-auto mb-6" />
                     <h1 className="text-2xl font-bold mb-4">Session Not Found</h1>
                     <p className="text-gray-400 mb-6">
-                        The quiz session you're looking for doesn't exist or may have been deleted. 
-                        This could happen if:
+                        The quiz session you're looking for doesn't exist or may have been deleted.
                     </p>
-                    <ul className="text-left text-gray-400 mb-6 space-y-2">
-                        <li>• The session was created in a different browser or device</li>
-                        <li>• The browser data was cleared</li>
-                        <li>• The session ID is invalid</li>
-                    </ul>
                     <div className="flex gap-4 justify-center">
                         <Link 
                             href="/" 
@@ -164,14 +133,11 @@ export default function InteractiveSession() {
                         </Link>
                         <button
                             onClick={() => {
-                                console.log('Manual retry initiated');
                                 setIsLoading(true);
                                 setSessionNotFound(false);
                                 
-                                // Force a re-check of localStorage and store
                                 const id = sessionId || router.query.uuid;
                                 if (id && typeof id === 'string') {
-                                    // First try the refreshSession method
                                     const refreshedSession = refreshSession(id as string);
                                     if (refreshedSession) {
                                         setSession(refreshedSession);
@@ -180,35 +146,6 @@ export default function InteractiveSession() {
                                         return;
                                     }
                                     
-                                    // Then try regular getSessionById
-                                    const foundSession = getSessionById(id as string);
-                                    if (foundSession) {
-                                        setSession(foundSession);
-                                        setIsLoading(false);
-                                        toast.success('Session loaded successfully!');
-                                        return;
-                                    }
-                                    
-                                    // Finally try localStorage
-                                    try {
-                                        const storedData = localStorage.getItem('eduquest-sessions');
-                                        if (storedData) {
-                                            const parsedData = JSON.parse(storedData);
-                                            const storedSessions = parsedData?.state?.sessions || [];
-                                            const foundStoredSession = storedSessions.find((s: any) => s.id === id);
-                                            
-                                            if (foundStoredSession) {
-                                                setSession(foundStoredSession);
-                                                setIsLoading(false);
-                                                toast.success('Session recovered from localStorage!');
-                                                return;
-                                            }
-                                        }
-                                    } catch (error) {
-                                        console.error('Error in manual retry:', error);
-                                    }
-                                    
-                                    // Still not found
                                     setIsLoading(false);
                                     setSessionNotFound(true);
                                     toast.error('Session still not found');
@@ -219,17 +156,6 @@ export default function InteractiveSession() {
                             <FiRefreshCw size={20} />
                             Try Again
                         </button>
-                        <button
-                            onClick={() => router.back()}
-                            className="px-6 py-3 bg-gray-600 hover:bg-gray-700 rounded-lg transition-colors"
-                        >
-                            Go Back
-                        </button>
-                    </div>
-                    <div className="mt-6 p-4 bg-[#1F2329] rounded-lg">
-                        <p className="text-sm text-gray-500">
-                            Session ID: <code className="bg-gray-700 px-2 py-1 rounded text-xs">{sessionId}</code>
-                        </p>
                     </div>
                 </div>
             </div>
@@ -243,12 +169,37 @@ export default function InteractiveSession() {
     const longQuestions = session.questions.filter((q: Question) => q.type === 'long');
 
     const handleAnswerChange = (questionId: string, answer: string | boolean) => {
+        console.log('Saving answer for question:', questionId, 'Answer:', answer);
+        
+        // Save to store
         saveAnswer(questionId, answer);
-        // The session sync will be handled by the separate useEffect above
+        
+        // Immediately update local session state to ensure UI reactivity
+        setSession((prevSession: any) => {
+            if (!prevSession) return prevSession;
+            
+            const updatedAnswers = [...prevSession.userAnswers];
+            const existingAnswerIndex = updatedAnswers.findIndex(
+                (userAnswer: UserAnswer) => userAnswer.questionId === questionId
+            );
+            
+            if (existingAnswerIndex >= 0) {
+                updatedAnswers[existingAnswerIndex] = { questionId, answer };
+            } else {
+                updatedAnswers.push({ questionId, answer });
+            }
+            
+            return {
+                ...prevSession,
+                userAnswers: updatedAnswers
+            };
+        });
     };
 
     const getUserAnswer = (questionId: string) => {
-        return session.userAnswers.find((answer: UserAnswer) => answer.questionId === questionId)?.answer;
+        const answer = session.userAnswers.find((answer: UserAnswer) => answer.questionId === questionId)?.answer;
+        console.log('Getting answer for question:', questionId, 'Answer:', answer);
+        return answer;
     };
 
     const handleAnalyze = async () => {
@@ -266,22 +217,21 @@ export default function InteractiveSession() {
                 answer: getUserAnswer(q.id) || ''
             }));
 
+            console.log('Sending for analysis:', { shortAnswers, longAnswers });
+
             const response = await axios.post('/api/analyze-answers', {
                 shortQuestions: shortAnswers,
                 longQuestions: longAnswers
             });
 
-            console.log('Analysis API response:', response.data);
             const feedback = response.data.feedback;
             const scoreMatch = feedback.match(/(\d+)/);
             const score = scoreMatch ? parseInt(scoreMatch[0]) : 0;
 
-            console.log('Extracted score:', score, 'from feedback:', feedback);
-
             const analysis = {
                 score,
                 totalQuestions: session.questions.length,
-                percentage: Math.round((score / 100) * 100),
+                percentage: Math.round((score / session.questions.length) * 100),
                 feedback,
                 accuracyScore: score,
                 timestamp: new Date()
@@ -292,35 +242,36 @@ export default function InteractiveSession() {
             markSessionCompleted(session.id);
             
             // Update local session state with the new analysis
-            const updatedSession = getSessionById(session.id);
-            if (updatedSession) {
-                setSession(updatedSession);
-            }
-            
-            // Update localStorage for compatibility
-            const storedScore = localStorage.getItem('score');
-            const currentScore = storedScore ? parseInt(storedScore, 10) : 0;
-            localStorage.setItem('score', (currentScore + 1).toString());
-            localStorage.setItem('accuracyScore', score.toString());
+            setSession((prevSession: any) => ({
+                ...prevSession,
+                analysis,
+                isCompleted: true
+            }));
 
             setShowResults(true);
             toast.success('Analysis completed!');
 
         } catch (error) {
             console.error('Error during analysis:', error);
-            toast.error('Failed to analyze answers');
+            toast.error('Failed to analyze answers. Please try again.');
         }
         
         setIsAnalyzing(false);
     };
 
     const isQuestionAnswered = (questionId: string) => {
-        return session.userAnswers.some((answer: UserAnswer) => answer.questionId === questionId);
+        const answered = session.userAnswers.some((answer: UserAnswer) => answer.questionId === questionId);
+        console.log('Question', questionId, 'answered:', answered);
+        return answered;
     };
 
     const getProgressPercentage = () => {
-        return Math.round((session.userAnswers.length / session.questions.length) * 100);
+        const percentage = Math.round((session.userAnswers.length / session.questions.length) * 100);
+        console.log('Progress:', session.userAnswers.length, '/', session.questions.length, '=', percentage + '%');
+        return percentage;
     };
+
+    const allQuestionsAnswered = session.userAnswers.length === session.questions.length;
 
     return (
         <div className="min-h-screen bg-[#13151A] text-white">
@@ -381,15 +332,6 @@ export default function InteractiveSession() {
                             </button>
                         </div>
                     </div>
-                ) : showResults ? (
-                    /* Loading/Error state when showResults is true but no analysis */
-                    <div className="bg-[#1F2329] rounded-lg p-6 text-center">
-                        <div className="animate-spin rounded-full h-16 w-16 border-2 border-white border-t-transparent mx-auto mb-4"></div>
-                        <p>Processing analysis results...</p>
-                        <p className="text-sm text-gray-400 mt-2">
-                            Show Results: {showResults.toString()}, Has Analysis: {!!session.analysis}
-                        </p>
-                    </div>
                 ) : (
                     /* Questions Section */
                     <div className="space-y-8">
@@ -411,7 +353,7 @@ export default function InteractiveSession() {
                                         </div>
                                         <div className="grid grid-cols-1 md:grid-cols-2 gap-3 ml-6">
                                             {mcq.options?.map((option, optionIndex) => (
-                                                <label key={optionIndex} className="flex items-center gap-3 p-3 bg-gray-700 hover:bg-gray-600 rounded-lg cursor-pointer">
+                                                <label key={optionIndex} className="flex items-center gap-3 p-3 bg-gray-700 hover:bg-gray-600 rounded-lg cursor-pointer transition-colors">
                                                     <input
                                                         type="radio"
                                                         name={`mcq-${mcq.id}`}
@@ -447,7 +389,7 @@ export default function InteractiveSession() {
                                                     value={getUserAnswer(fill.id) || ''}
                                                     onChange={(e) => handleAnswerChange(fill.id, e.target.value)}
                                                     placeholder="Enter your answer..."
-                                                    className="w-full p-3 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:border-blue-500 focus:outline-none"
+                                                    className="w-full p-3 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:border-blue-500 focus:outline-none transition-colors"
                                                 />
                                             </div>
                                             {isQuestionAnswered(fill.id) && (
@@ -476,7 +418,7 @@ export default function InteractiveSession() {
                                             )}
                                         </div>
                                         <div className="flex gap-4 ml-6">
-                                            <label className="flex items-center gap-2 p-3 bg-gray-700 hover:bg-gray-600 rounded-lg cursor-pointer">
+                                            <label className="flex items-center gap-2 p-3 bg-gray-700 hover:bg-gray-600 rounded-lg cursor-pointer transition-colors">
                                                 <input
                                                     type="radio"
                                                     name={`tf-${tf.id}`}
@@ -486,7 +428,7 @@ export default function InteractiveSession() {
                                                 />
                                                 <span className="text-green-400">True</span>
                                             </label>
-                                            <label className="flex items-center gap-2 p-3 bg-gray-700 hover:bg-gray-600 rounded-lg cursor-pointer">
+                                            <label className="flex items-center gap-2 p-3 bg-gray-700 hover:bg-gray-600 rounded-lg cursor-pointer transition-colors">
                                                 <input
                                                     type="radio"
                                                     name={`tf-${tf.id}`}
@@ -520,7 +462,7 @@ export default function InteractiveSession() {
                                                     onChange={(e) => handleAnswerChange(short.id, e.target.value)}
                                                     placeholder="Enter your short answer..."
                                                     rows={3}
-                                                    className="w-full p-3 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:border-blue-500 focus:outline-none resize-none"
+                                                    className="w-full p-3 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:border-blue-500 focus:outline-none resize-none transition-colors"
                                                 />
                                             </div>
                                             {isQuestionAnswered(short.id) && (
@@ -550,7 +492,7 @@ export default function InteractiveSession() {
                                                     onChange={(e) => handleAnswerChange(long.id, e.target.value)}
                                                     placeholder="Enter your detailed answer..."
                                                     rows={6}
-                                                    className="w-full p-3 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:border-blue-500 focus:outline-none resize-none"
+                                                    className="w-full p-3 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:border-blue-500 focus:outline-none resize-none transition-colors"
                                                 />
                                             </div>
                                             {isQuestionAnswered(long.id) && (
@@ -567,7 +509,13 @@ export default function InteractiveSession() {
                             <button
                                 onClick={handleAnalyze}
                                 disabled={isAnalyzing || session.userAnswers.length === 0}
-                                className="px-8 py-4 bg-green-600 hover:bg-green-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white font-semibold rounded-lg transition-colors flex items-center gap-3 mx-auto"
+                                className={`px-8 py-4 font-semibold rounded-lg transition-colors flex items-center gap-3 mx-auto ${
+                                    allQuestionsAnswered
+                                        ? 'bg-green-600 hover:bg-green-700 text-white'
+                                        : session.userAnswers.length > 0
+                                        ? 'bg-yellow-600 hover:bg-yellow-700 text-white'
+                                        : 'bg-gray-600 cursor-not-allowed text-gray-400'
+                                } ${isAnalyzing ? 'opacity-50 cursor-not-allowed' : ''}`}
                             >
                                 {isAnalyzing ? (
                                     <>
@@ -577,10 +525,18 @@ export default function InteractiveSession() {
                                 ) : (
                                     <>
                                         <FiSave size={20} />
-                                        Submit & Analyze ({session.userAnswers.length}/{session.questions.length} answered)
+                                        {allQuestionsAnswered 
+                                            ? `Submit Complete Quiz (${session.userAnswers.length}/${session.questions.length})`
+                                            : `Submit Partial Quiz (${session.userAnswers.length}/${session.questions.length} answered)`
+                                        }
                                     </>
                                 )}
                             </button>
+                            {!allQuestionsAnswered && session.userAnswers.length > 0 && (
+                                <p className="text-sm text-yellow-400 mt-2">
+                                    You can submit now, but consider answering all questions for a complete analysis.
+                                </p>
+                            )}
                         </div>
                     </div>
                 )}
