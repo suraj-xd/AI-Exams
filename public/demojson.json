@@ -1,0 +1,122 @@
+{
+  "5_mcqs": [
+    {
+      "question": "Which of the following is NOT a type of education?",
+      "options": [
+        "Formal",
+        "Non-formal",
+        "Informal",
+        "Professional"
+      ],
+      "answer": "Professional"
+    },
+    {
+      "question": "What is the main purpose of education?",
+      "options": [
+        "To provide knowledge and skills",
+        "To develop critical thinking skills",
+        "To prepare individuals for the workforce",
+        "To promote personal growth"
+      ],
+      "answer": "To provide knowledge and skills"
+    },
+    {
+      "question": "Which of the following is NOT a benefit of education?",
+      "options": [
+        "Increased earning potential",
+        "Improved health outcomes",
+        "Reduced crime rates",
+        "Greater happiness"
+      ],
+      "answer": "Greater happiness"
+    },
+    {
+      "question": "What is the role of teachers in the education process?",
+      "options": [
+        "To transmit knowledge",
+        "To facilitate learning",
+        "To assess student progress",
+        "All of the above"
+      ],
+      "answer": "All of the above"
+    },
+    {
+      "question": "What are the challenges facing education today?",
+      "options": [
+        "Lack of funding",
+        "Inequality of access",
+        "Outdated curricula",
+        "All of the above"
+      ],
+      "answer": "All of the above"
+    }
+  ],
+  "5_fill_in_the_blanks": [
+    {
+      "question": "The __________ of education is to provide individuals with the knowledge and skills they need to succeed in life.",
+      "answer": "Purpose"
+    },
+    {
+      "question": "Education can help to __________ poverty and inequality.",
+      "answer": "Reduce"
+    },
+    {
+      "question": "Teachers play a __________ role in the education process.",
+      "answer": "Vital"
+    },
+    {
+      "question": "Education should be __________ accessible to all.",
+      "answer": "Equally"
+    },
+    {
+      "question": "The __________ of education is constantly changing.",
+      "answer": "Landscape"
+    }
+  ],
+  "5_true_false": [
+    {
+      "question": "Education is only important for children.",
+      "answer": "False"
+    },
+    {
+      "question": "All education is created equal.",
+      "answer": "False"
+    },
+    {
+      "question": "Teachers are the only ones who can educate.",
+      "answer": "False"
+    },
+    {
+      "question": "Education is a lifelong process.",
+      "answer": "True"
+    },
+    {
+      "question": "Education can solve all of society's problems.",
+      "answer": "False"
+    }
+  ],
+  "3_short_type_questions": [
+    {
+      "question": "What are the most important qualities of a good teacher?",
+      "answer": ""
+    },
+    {
+      "question": "What are the biggest challenges facing education today?",
+      "answer": ""
+    },
+    {
+      "question": "What is the role of technology in education?",
+      "answer": ""
+    }
+  ],
+  "2_long_type_questions": [
+    {
+      "question": "Discuss the importance of education in society.",
+      "answer": ""
+    },
+    {
+      "question": "What are the different types of education and how do they compare?",
+      "answer": ""
+    }
+  ]
+}
