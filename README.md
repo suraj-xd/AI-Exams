@@ -1,4 +1,4 @@
-# 🚀 AI Exams
+# 🚀 AI Exams : 100xEngineers Buildathon Project
 
 ▶️ [Watch Demo](https://drive.google.com/file/d/1xv40JRgDIw9uiRCjyKHJ9W2u8DMSp7FQ/view?usp=sharing)
 
