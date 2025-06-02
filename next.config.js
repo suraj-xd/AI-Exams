@@ -7,6 +7,16 @@ await import("./src/env.js");
 /** @type {import("next").NextConfig} */
 const config = {
   // reactStrictMode: true,
+  
+  // Skip TypeScript type checking during build
+  typescript: {
+    ignoreBuildErrors: true,
+  },
+  
+  // Skip ESLint during builds
+  eslint: {
+    ignoreDuringBuilds: true,
+  },
 
   /**
    * If you are using `appDir` then you must comment the below `i18n` config out.

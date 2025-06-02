@@ -65,7 +65,7 @@ export function TopicInputComponent() {
     }, [prompt])
 
     useEffect(() => {
-        const parseResponseData = (data) => {
+        const parseResponseData = (data: any) => {
             console.log("Data in JSON Parse");
             console.log(data);
             
