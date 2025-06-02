@@ -41,7 +41,7 @@ const SettingsDialog: React.FC<SettingsDialogProps> = ({ isOpen, onClose }) => {
         return;
       }
 
-      setLocalApiKey(apiKey.trim());
+      await setLocalApiKey(apiKey.trim());
       toast.success('API key saved successfully!');
     } catch (error) {
       toast.error('Failed to save API key');
@@ -50,15 +50,27 @@ const SettingsDialog: React.FC<SettingsDialogProps> = ({ isOpen, onClose }) => {
     }
   };
 
-  const handleRemoveApiKey = () => {
-    removeLocalApiKey();
-    setApiKey('');
-    toast.success('API key removed successfully');
+  const handleRemoveApiKey = async () => {
+    try {
+      await removeLocalApiKey();
+      setApiKey('');
+      toast.success('API key removed successfully');
+    } catch (error) {
+      toast.error('Failed to remove API key');
+    }
   };
 
-  const handleResetCredits = () => {
-    resetCredits();
-    toast.success('Credits reset to 4');
+  const handleResetCredits = async () => {
+    try {
+      const success = await resetCredits();
+      if (success) {
+        toast.success('Credits reset to 4');
+      } else {
+        toast.error('Failed to reset credits');
+      }
+    } catch (error) {
+      toast.error('Failed to reset credits');
+    }
   };
 
   const maskApiKey = (key: string) => {
@@ -190,6 +202,7 @@ const SettingsDialog: React.FC<SettingsDialogProps> = ({ isOpen, onClose }) => {
             <p className="text-xs text-gray-400">
               <FiShield className="mr-1 inline" size={12} />
               Your API key is stored securely in your browser's local storage and never sent to our servers.
+              Credits are now managed server-side for security.
             </p>
           </div>
 

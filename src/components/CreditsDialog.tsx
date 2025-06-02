@@ -29,7 +29,7 @@ const CreditsDialog: React.FC<CreditsDialogProps> = ({ isOpen, onClose, onApiKey
         return;
       }
 
-      setLocalApiKey(apiKey.trim());
+      await setLocalApiKey(apiKey.trim());
       toast.success('API key saved successfully! You can now use unlimited generations.');
       onApiKeySet();
       onClose();

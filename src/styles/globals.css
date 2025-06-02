@@ -1,5 +1,5 @@
-@import url('https://fonts.googleapis.com/css2?family=Source+Code+Pro:wght@400;500&display=swap');
-@import url('https://fonts.googleapis.com/css2?family=Urbanist:wght@400;500;600;700;800;900&display=swap');
+@import url("https://fonts.googleapis.com/css2?family=Source+Code+Pro:wght@400;500&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Urbanist:wght@400;500;600;700;800;900&display=swap");
 
 @tailwind base;
 @tailwind components;
@@ -31,16 +31,30 @@
 }
 
 .urbanist {
-    font-family: 'Urbanist', sans-serif;
+  font-family: "Urbanist", sans-serif;
 }
 
-body{
-    font-family: 'Urbanist', sans-serif;
+body {
+  font-family: "Urbanist", sans-serif;
+  overscroll-behavior: none;
+  background-color: #fdfff4;
+  -webkit-tap-highlight-color: transparent;
 }
 
 .email-submit-button {
-    border-radius: 9px;
-    border: 1px solid #FFFFFF3D;
-    background: linear-gradient(269deg, #4214F780 6.43%, #00000000 56.37%), linear-gradient(90deg, #4214F780 11.81%, #7E4AEC00 92.02%), linear-gradient(180deg, #9F72FF 0%, #6D36E2 100%);
-    box-shadow: 0px 0px 6px 0px #49494940 inset;
+  border-radius: 9px;
+  border: 1px solid #ffffff3d;
+  background: linear-gradient(269deg, #4214f780 6.43%, #00000000 56.37%),
+    linear-gradient(90deg, #4214f780 11.81%, #7e4aec00 92.02%),
+    linear-gradient(180deg, #9f72ff 0%, #6d36e2 100%);
+  box-shadow: 0px 0px 6px 0px #49494940 inset;
+}
+
+input[type="text"],
+input[type="password"],
+input[type="email"],
+textarea,
+select {
+  zoom: none;
+  -webkit-tap-highlight-color: transparent;
 }

@@ -132,14 +132,14 @@ export const useEnhancedEduQuest = () => {
   }, [getApiKey]);
 
   // Check credits before API call
-  const checkCreditsAndDeduct = useCallback((): boolean => {
+  const checkCreditsAndDeduct = useCallback(async (): Promise<boolean> => {
     // If using local API key, don't check credits
     if (isUsingLocalKey()) {
       return true;
     }
     
     // Try to deduct credits (returns false if no credits available)
-    return decrementCredits();
+    return await decrementCredits();
   }, [decrementCredits, isUsingLocalKey]);
 
   // API call wrapper with error handling and credit management
@@ -168,7 +168,8 @@ export const useEnhancedEduQuest = () => {
     config?: Partial<QuestionConfig>
   ): Promise<GenerationResult | null> => {
     // Check credits before making API call
-    if (!checkCreditsAndDeduct()) {
+    const canProceed = await checkCreditsAndDeduct();
+    if (!canProceed) {
       setError({
         code: 'NO_CREDITS',
         message: 'You have 0 generations remaining. Please add your own API key to continue.',

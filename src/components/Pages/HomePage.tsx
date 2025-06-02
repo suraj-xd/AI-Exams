@@ -48,7 +48,7 @@ const HomePage: React.FC = () => {
   const recentSessions = getRecentSessions(3);
 
   return (
-    <div className="mx-auto flex min-h-screen w-screen items-center justify-start bg-[#13151A] text-white">
+    <div className="mx-auto overscroll-contain scroll-smooth flex min-h-screen w-screen items-center justify-start bg-[#13151A] text-white">
       {/* Sidebar */}
       <div className="flex h-[100vh] w-[20%] flex-col justify-between bg-[#13151A]  ">
         <div className="items-strt mx-4 mt-5 flex h-fit flex-1 flex-col justify-start space-y-1">
@@ -292,7 +292,7 @@ function HomeContent({
       )}
 
       {/* Main Content - Centered and Minimal */}
-      <div className="relative flex min-h-[calc(100vh-130px)] flex-col items-center justify-center overflow-hidden p-6">
+      <div className="relative flex min-h-[calc(100vh-130px)] flex-col items-start justify-start overflow-hidden p-6">
         {!prompt && !loading && !jsonData && (
           <div className="mx-auto flex max-w-4xl items-center justify-center">
             <PromptSuggestions
@@ -305,7 +305,7 @@ function HomeContent({
 
         {/* Results Display */}
         {jsonData && (
-          <div className="mx-6 mb-6 rounded-lg border border-gray-600 bg-[#383942] p-6">
+          <div className="w-full mx-6 mb-6 h-[calc(100vh-300px)] overflow-y-auto rounded-lg border border-gray-600 bg-[#383942] p-6">
             <div className="mb-4 flex items-center space-x-2 text-green-400">
               <FiCheckCircle size={20} />
               <h3 className="text-lg font-medium">Generated Questions</h3>
