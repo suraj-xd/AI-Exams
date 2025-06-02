@@ -1,5 +1,7 @@
 # 🚀 AI Exams
 
+▶️ [Watch Demo](https://drive.google.com/file/d/1xv40JRgDIw9uiRCjyKHJ9W2u8DMSp7FQ/view?usp=sharing)
+
 ![OG Image](og-image.png)
 ![OG Image](og-image2.png)
 
@@ -35,5 +37,3 @@ Generate questions, simulate exams, play educational games, and level up — all
 ---
 
 **AI Exams — Assess better. Learn smarter.**
-
-▶️ [Watch Demo](https://drive.google.com/file/d/1M6qXOsYHIdFa4L0JmTk59A2r4n_9POU8/view?usp=sharing)
