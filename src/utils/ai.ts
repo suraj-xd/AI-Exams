@@ -1,19 +1,20 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
 
-if (!process.env.GEMINI_API_KEY) {
-  throw new Error("GEMINI_API_KEY is not set in environment variables");
-}
-
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-
-// Updated model fallback priority - using current available models
 const MODEL_FALLBACKS = [
   "gemini-1.5-flash",        // Current stable multimodal model
   "gemini-1.5-pro",          // Higher quality option
   "gemini-pro",              // Fallback stable model
 ];
 
-export const getTextModel = () => {
+export const getTextModel = (apiKey?: string) => {
+  const keyToUse = apiKey || process.env.GEMINI_API_KEY;
+  
+  if (!keyToUse) {
+    throw new Error("GEMINI_API_KEY is not available");
+  }
+
+  const genAI = new GoogleGenerativeAI(keyToUse);
+  
   // Try models in order of preference
   for (const modelName of MODEL_FALLBACKS) {
     try {
@@ -39,13 +40,15 @@ export const generateQuestions = async (
     trueFalse: number;
     shortType: number;
     longType: number;
-  }
+  },
+  apiKey?: string
 ) => {
   try {
     console.log('Starting question generation for topic:', topic);
     console.log('Configuration:', config);
+    console.log('Using custom API key:', !!apiKey);
     
-    const model = getTextModel();
+    const model = getTextModel(apiKey);
     console.log('Model initialized successfully');
     
     const prompt = `Generate educational assessment questions for the topic: "${topic}"
@@ -101,32 +104,53 @@ Ensure all questions are educational, appropriate, and relevant to the topic. Ma
     const response = await result.response;
     const text = await response.text();
     console.log('Raw AI response:', text);
+
+    // Clean the response - remove any markdown formatting
+    let cleanedText = text.trim();
     
-    // Clean the response to extract JSON
-    let cleanedText = text
-      .replace(/^```(json|JSON)?/gm, '')
-      .replace(/```$/gm, '')
-      .replace(/^\s*[\r\n]/gm, '')
-      .trim();
-    
-    console.log('Cleaned text for parsing:', cleanedText);
-    
-    try {
-      const parsedResult = JSON.parse(cleanedText);
-      console.log('Successfully parsed JSON result');
-      return parsedResult;
-    } catch (parseError) {
-      console.error("Failed to parse AI response as JSON:", parseError);
-      console.error("Cleaned text was:", cleanedText);
-      const errorMessage = parseError instanceof Error ? parseError.message : String(parseError);
-      throw new Error("AI generated invalid JSON response: " + errorMessage);
+    // Remove markdown code block formatting if present
+    if (cleanedText.startsWith('```json')) {
+      cleanedText = cleanedText.replace(/^```json\s*/, '').replace(/\s*```$/, '');
+    } else if (cleanedText.startsWith('```')) {
+      cleanedText = cleanedText.replace(/^```\s*/, '').replace(/\s*```$/, '');
     }
+    
+    console.log('Cleaned response:', cleanedText);
+
+    // Parse JSON response
+    let parsedData;
+    try {
+      parsedData = JSON.parse(cleanedText);
+      console.log('Successfully parsed JSON:', parsedData);
+    } catch (parseError) {
+      console.error('JSON parsing failed:', parseError);
+      console.error('Text that failed to parse:', cleanedText);
+      throw new Error('Invalid JSON response from AI model');
+    }
+
+    // Validate that we have the expected structure
+    if (!parsedData || typeof parsedData !== 'object') {
+      throw new Error('Invalid response structure');
+    }
+
+    // Ensure arrays exist (they might be empty)
+    const result_data = {
+      mcqs: parsedData.mcqs || [],
+      fill_in_the_blanks: parsedData.fill_in_the_blanks || [],
+      true_false: parsedData.true_false || [],
+      short_type: parsedData.short_type || [],
+      long_type: parsedData.long_type || [],
+    };
+
+    console.log('Final structured data:', result_data);
+    return result_data;
+
   } catch (error) {
-    console.error("Error in generateQuestions:", error);
+    console.error('Question generation error:', error);
     if (error instanceof Error) {
       throw error;
     }
-    throw new Error("Unknown error occurred during question generation");
+    throw new Error('Failed to generate questions');
   }
 };
 
@@ -152,8 +176,8 @@ export const extractTextFromImage = async (
 export const analyzeAnswers = async (data: {
   shortQuestions: Array<{ question: string; answer: string }>;
   longQuestions: Array<{ question: string; answer: string }>;
-}) => {
-  const model = getTextModel();
+}, apiKey?: string) => {
+  const model = getTextModel(apiKey);
   
   const prompt = `Analyze the following student answers and provide feedback:
 

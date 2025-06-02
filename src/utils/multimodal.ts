@@ -1,12 +1,6 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { z } from 'zod';
 
-if (!process.env.GEMINI_API_KEY) {
-  throw new Error("GEMINI_API_KEY is not set in environment variables");
-}
-
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-
 // Schemas for structured outputs
 export const QuestionSchema = z.object({
   mcqs: z.array(z.object({
@@ -48,17 +42,281 @@ export const ContentExtractionSchema = z.object({
 export type QuestionSet = z.infer<typeof QuestionSchema>;
 export type ContentExtraction = z.infer<typeof ContentExtractionSchema>;
 
-interface ProcessingContext {
-  images?: Array<{
-    data: string; // base64
+interface ProcessedContext {
+  textContent: string;
+  imageData?: {
+    data: string;
     mimeType: string;
-  }>;
-  documents?: Array<{
+  }[];
+  documentData?: {
+    type: string;
     content: string;
-    filename: string;
-    mimeType: string;
-  }>;
-  textContent?: string;
+  }[];
+}
+
+interface QuestionConfig {
+  mcqs: number;
+  fillInBlanks: number;
+  trueFalse: number;
+  shortType: number;
+  longType: number;
+}
+
+/**
+ * Generate questions with multimodal context (text + images + documents)
+ */
+export async function generateQuestionsWithContext(
+  context: ProcessedContext,
+  config: QuestionConfig,
+  additionalPrompt?: string,
+  apiKey?: string
+): Promise<QuestionSet> {
+  try {
+    const keyToUse = apiKey || process.env.GEMINI_API_KEY;
+    
+    if (!keyToUse) {
+      throw new Error("GEMINI_API_KEY is not available");
+    }
+
+    const genAI = new GoogleGenerativeAI(keyToUse);
+    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+
+    const basePrompt = `Based on the provided content, generate educational assessment questions with the following requirements:
+
+- ${config.mcqs} multiple choice questions (MCQs) with 4 options each
+- ${config.fillInBlanks} fill in the blank questions
+- ${config.trueFalse} true/false questions  
+- ${config.shortType} short answer questions
+- ${config.longType} long answer questions
+
+${additionalPrompt ? `Additional context: ${additionalPrompt}` : ''}
+
+Return a valid JSON object with this exact structure:
+{
+  "mcqs": [
+    {
+      "question": "Question text here",
+      "options": ["Option A", "Option B", "Option C", "Option D"],
+      "answer": "Correct option",
+      "explanation": "Brief explanation (optional)"
+    }
+  ],
+  "fill_in_the_blanks": [
+    {
+      "question": "Question with _____ blank",
+      "answer": "correct answer",
+      "explanation": "Brief explanation (optional)"
+    }
+  ],
+  "true_false": [
+    {
+      "question": "Statement to evaluate",
+      "answer": true,
+      "explanation": "Brief explanation (optional)"
+    }
+  ],
+  "short_type": [
+    {
+      "question": "Short answer question",
+      "answer": "Expected short answer",
+      "points": 2
+    }
+  ],
+  "long_type": [
+    {
+      "question": "Long answer question",
+      "answer": "Expected detailed answer",
+      "points": 5
+    }
+  ]
+}
+
+Make questions comprehensive, covering key concepts from the provided material. Ensure JSON is valid without markdown formatting.`;
+
+    const contentParts: any[] = [basePrompt];
+
+    // Add text content
+    if (context.textContent) {
+      contentParts.push(`\n\nText Content:\n${context.textContent}`);
+    }
+
+    // Add image data if present
+    if (context.imageData && context.imageData.length > 0) {
+      context.imageData.forEach((img, index) => {
+        contentParts.push({
+          inlineData: {
+            data: img.data,
+            mimeType: img.mimeType,
+          },
+        });
+        contentParts.push(`\n[Image ${index + 1} above should be analyzed for content]`);
+      });
+    }
+
+    // Add document data
+    if (context.documentData && context.documentData.length > 0) {
+      context.documentData.forEach((doc, index) => {
+        contentParts.push(`\n\nDocument ${index + 1} (${doc.type}):\n${doc.content}`);
+      });
+    }
+
+    console.log('Generating questions with multimodal context...');
+    const result = await model.generateContent(contentParts);
+    const response = await result.response;
+    const text = await response.text();
+
+    console.log('Raw multimodal response:', text);
+
+    // Clean the response
+    let cleanedText = text.trim();
+    if (cleanedText.startsWith('```json')) {
+      cleanedText = cleanedText.replace(/^```json\s*/, '').replace(/\s*```$/, '');
+    } else if (cleanedText.startsWith('```')) {
+      cleanedText = cleanedText.replace(/^```\s*/, '').replace(/\s*```$/, '');
+    }
+
+    console.log('Cleaned multimodal response:', cleanedText);
+
+    // Parse and validate
+    const parsedData = JSON.parse(cleanedText);
+    const validatedData = QuestionSchema.parse(parsedData);
+
+    console.log('Successfully generated multimodal questions:', validatedData);
+    return validatedData;
+
+  } catch (error) {
+    console.error('Error generating questions with context:', error);
+    
+    if (error instanceof z.ZodError) {
+      throw new Error(`Question format validation failed: ${error.errors.map(e => e.message).join(', ')}`);
+    }
+    
+    if (error instanceof Error) {
+      throw error;
+    }
+    
+    throw new Error('Failed to generate questions with context');
+  }
+}
+
+/**
+ * Preprocess multimodal input files
+ */
+export async function preprocessMultimodalInput(files: any[], apiKey?: string): Promise<{
+  extractedContent: any[];
+  processedContext: ProcessedContext;
+}> {
+  const extractedContent: any[] = [];
+  const processedContext: ProcessedContext = {
+    textContent: '',
+    imageData: [],
+    documentData: [],
+  };
+
+  for (const uploadedFile of files) {
+    try {
+      const file = uploadedFile.file;
+      const buffer = await file.arrayBuffer();
+      const uint8Array = new Uint8Array(buffer);
+      const mimeType = file.type;
+
+      if (mimeType.startsWith('image/')) {
+        // Handle images
+        const base64Data = Buffer.from(uint8Array).toString('base64');
+        
+        processedContext.imageData = processedContext.imageData || [];
+        processedContext.imageData.push({
+          data: base64Data,
+          mimeType: mimeType,
+        });
+
+        // Also extract text from image using Gemini
+        try {
+          const keyToUse = apiKey || process.env.GEMINI_API_KEY;
+          
+          if (keyToUse) {
+            const genAI = new GoogleGenerativeAI(keyToUse);
+            const visionModel = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+            
+            const visionPrompt = "Extract and describe all text and educational content from this image. Include formulas, diagrams, and any relevant information that could be used to generate questions.";
+            
+            const imagePart = {
+              inlineData: {
+                data: base64Data,
+                mimeType: mimeType,
+              },
+            };
+
+            const visionResult = await visionModel.generateContent([visionPrompt, imagePart]);
+            const visionResponse = await visionResult.response;
+            const extractedText = await visionResponse.text();
+            
+            processedContext.textContent += `\n\nExtracted from image: ${extractedText}`;
+            
+            extractedContent.push({
+              type: 'image',
+              filename: file.name,
+              mimeType: mimeType,
+              extractedText: extractedText,
+            });
+          }
+        } catch (visionError) {
+          console.warn('Failed to extract text from image:', visionError);
+        }
+
+      } else if (mimeType === 'application/pdf') {
+        // Handle PDFs - try to extract text
+        try {
+          const textContent = uint8Array.toString(); // This is simplified - in production use proper PDF parser
+          processedContext.textContent += `\n\n${textContent}`;
+          
+          processedContext.documentData = processedContext.documentData || [];
+          processedContext.documentData.push({
+            type: 'pdf',
+            content: textContent,
+          });
+
+          extractedContent.push({
+            type: 'pdf',
+            filename: file.name,
+            textContent: textContent,
+          });
+        } catch (pdfError) {
+          console.warn('Failed to extract text from PDF:', pdfError);
+        }
+
+      } else if (mimeType.startsWith('text/')) {
+        // Handle text files
+        const textContent = new TextDecoder().decode(uint8Array);
+        processedContext.textContent += `\n\n${textContent}`;
+        
+        processedContext.documentData = processedContext.documentData || [];
+        processedContext.documentData.push({
+          type: 'text',
+          content: textContent,
+        });
+
+        extractedContent.push({
+          type: 'text',
+          filename: file.name,
+          textContent: textContent,
+        });
+      }
+
+    } catch (error) {
+      console.error(`Error processing file ${uploadedFile.file?.name}:`, error);
+      extractedContent.push({
+        type: 'error',
+        filename: uploadedFile.file?.name || 'unknown',
+        error: error instanceof Error ? error.message : 'Unknown error',
+      });
+    }
+  }
+
+  return {
+    extractedContent,
+    processedContext,
+  };
 }
 
 /**
@@ -71,7 +329,7 @@ export async function extractFromImage(
 ): Promise<ContentExtraction> {
   // Use the more reliable gemini-2.0-flash for multimodal tasks
   const modelName = "gemini-2.0-flash";
-  const model = genAI.getGenerativeModel({ model: modelName });
+  const model = new GoogleGenerativeAI(process.env.GEMINI_API_KEY).getGenerativeModel({ model: modelName });
   
   const prompt = `Analyze this image and extract educational content. Focus on:
 1. Main textual content (OCR if needed)
@@ -141,7 +399,7 @@ export async function extractFromDocument(
   mimeType: string
 ): Promise<ContentExtraction> {
   const modelName = "gemini-2.0-flash";
-  const model = genAI.getGenerativeModel({ model: modelName });
+  const model = new GoogleGenerativeAI(process.env.GEMINI_API_KEY).getGenerativeModel({ model: modelName });
   
   const prompt = `Analyze this document content and extract educational information:
 
@@ -202,196 +460,4 @@ Return a JSON object with the following structure:
     console.error('Error extracting from document:', error);
     throw new Error(`Failed to extract content from document: ${error instanceof Error ? error.message : 'Unknown error'}`);
   }
-}
-
-/**
- * Generate questions with multimodal context using structured output
- */
-export async function generateQuestionsWithContext(
-  context: ProcessingContext,
-  config: {
-    mcqs: number;
-    fillInBlanks: number;
-    trueFalse: number;
-    shortType: number;
-    longType: number;
-  },
-  userPrompt?: string
-): Promise<QuestionSet> {
-  const modelName = "gemini-2.0-flash";
-  const model = genAI.getGenerativeModel({ model: modelName });
-  
-  // Build context from multimodal inputs
-  let contextPrompt = "Generate educational questions based on the following context:\n\n";
-  
-  if (userPrompt) {
-    contextPrompt += `User Request: ${userPrompt}\n\n`;
-  }
-
-  if (context.textContent) {
-    contextPrompt += `Text Content: ${context.textContent}\n\n`;
-  }
-
-  const questionPrompt = `${contextPrompt}
-
-Please generate exactly:
-- ${config.mcqs} multiple choice questions (4 options each)
-- ${config.fillInBlanks} fill in the blank questions
-- ${config.trueFalse} true/false questions  
-- ${config.shortType} short answer questions
-- ${config.longType} long answer questions
-
-Each question should be relevant to the provided content. Include explanations where helpful.
-For MCQs, ensure one option is clearly correct.
-For fill-in-the-blanks, use _____ to indicate the blank space.
-Provide comprehensive answers for short and long questions.
-
-Return a JSON object with the following structure:
-{
-  "mcqs": [{"question": "...", "options": ["A", "B", "C", "D"], "answer": "A", "explanation": "..."}],
-  "fill_in_the_blanks": [{"question": "...", "answer": "...", "explanation": "..."}],
-  "true_false": [{"question": "...", "answer": true, "explanation": "..."}],
-  "short_type": [{"question": "...", "answer": "...", "points": 5}],
-  "long_type": [{"question": "...", "answer": "...", "points": 10}]
-}`;
-
-  try {
-    // Prepare content for multimodal generation
-    let messageContent: any[] = [questionPrompt];
-    
-    // Add images for multimodal content if available
-    if (context.images && context.images.length > 0) {
-      context.images.forEach(img => {
-        messageContent.push({
-          inlineData: {
-            data: img.data,
-            mimeType: img.mimeType,
-          },
-        });
-      });
-    }
-
-    const result = await model.generateContent(messageContent);
-    const response = await result.response;
-    const text = await response.text();
-    
-    // Try to parse JSON response
-    try {
-      const jsonMatch = text.match(/\{[\s\S]*\}/);
-      if (jsonMatch) {
-        const parsed = JSON.parse(jsonMatch[0]);
-        
-        // Validate and normalize the response
-        return {
-          mcqs: Array.isArray(parsed.mcqs) ? parsed.mcqs : [],
-          fill_in_the_blanks: Array.isArray(parsed.fill_in_the_blanks) ? parsed.fill_in_the_blanks : [],
-          true_false: Array.isArray(parsed.true_false) ? parsed.true_false : [],
-          short_type: Array.isArray(parsed.short_type) ? parsed.short_type : [],
-          long_type: Array.isArray(parsed.long_type) ? parsed.long_type : [],
-        };
-      }
-    } catch (parseError) {
-      console.warn('JSON parsing failed for questions, generating fallback questions');
-    }
-    
-    // Final fallback - generate basic questions from the text
-    return generateFallbackQuestions(context.textContent || 'General knowledge', config);
-    
-  } catch (error) {
-    console.error('Error generating questions with context:', error);
-    throw new Error(`Failed to generate questions with multimodal context: ${error instanceof Error ? error.message : 'Unknown error'}`);
-  }
-}
-
-/**
- * Generate fallback questions when AI generation fails
- */
-function generateFallbackQuestions(content: string, config: any): QuestionSet {
-  const topic = content.substring(0, 100) + '...';
-  
-  return {
-    mcqs: config.mcqs > 0 ? [{
-      question: `What is the main topic discussed in: "${topic}"?`,
-      options: ['Option A', 'Option B', 'Option C', 'Option D'],
-      answer: 'Option A',
-      explanation: 'This is a fallback question generated when AI processing fails.'
-    }] : [],
-    fill_in_the_blanks: config.fillInBlanks > 0 ? [{
-      question: `The main concept discussed is _____.`,
-      answer: 'the provided content',
-      explanation: 'Fill in the blank based on the content provided.'
-    }] : [],
-    true_false: config.trueFalse > 0 ? [{
-      question: 'The content provided contains educational material.',
-      answer: true,
-      explanation: 'This is generally true for educational content.'
-    }] : [],
-    short_type: config.shortType > 0 ? [{
-      question: 'Summarize the main points from the provided content.',
-      answer: 'Please refer to the original content for key points.',
-      points: 5
-    }] : [],
-    long_type: config.longType > 0 ? [{
-      question: 'Provide a detailed analysis of the content provided.',
-      answer: 'A comprehensive analysis should include key themes, concepts, and practical applications.',
-      points: 10
-    }] : []
-  };
-}
-
-/**
- * Preprocess multimodal inputs to extract content
- */
-export async function preprocessMultimodalInput(
-  files: Array<{
-    buffer: Buffer;
-    filename: string;
-    mimeType: string;
-  }>
-): Promise<{
-  extractedContent: ContentExtraction[];
-  processedContext: ProcessingContext;
-}> {
-  const extractedContent: ContentExtraction[] = [];
-  const processedContext: ProcessingContext = {
-    images: [],
-    documents: [],
-    textContent: '',
-  };
-
-  for (const file of files) {
-    try {
-      if (file.mimeType.startsWith('image/')) {
-        // Process image
-        const content = await extractFromImage(file.buffer, file.mimeType, file.filename);
-        extractedContent.push(content);
-        
-        processedContext.images?.push({
-          data: file.buffer.toString('base64'),
-          mimeType: file.mimeType,
-        });
-        
-        // Add extracted text to context
-        processedContext.textContent += `\n\nFrom image ${file.filename}:\n${content.mainContent}`;
-        
-      } else if (file.mimeType === 'application/pdf' || file.mimeType.startsWith('text/')) {
-        // Process document
-        const textContent = file.buffer.toString('utf-8');
-        const content = await extractFromDocument(textContent, file.filename, file.mimeType);
-        extractedContent.push(content);
-        
-        processedContext.documents?.push({
-          content: textContent,
-          filename: file.filename,
-          mimeType: file.mimeType,
-        });
-        
-        processedContext.textContent += `\n\nFrom document ${file.filename}:\n${content.mainContent}`;
-      }
-    } catch (error) {
-      console.error(`Error processing file ${file.filename}:`, error);
-    }
-  }
-
-  return { extractedContent, processedContext };
 } 

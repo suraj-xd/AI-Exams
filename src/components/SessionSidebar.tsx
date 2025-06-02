@@ -110,7 +110,7 @@ const SessionSidebar: React.FC<SessionSidebarProps> = ({
           <span>Sessions</span>
         </button>
       </SheetTrigger>
-      <SheetContent className="w-full max-w-80">
+      <SheetContent className="w-full max-w-80 border-none">
         <div className="relative flex w-full flex-col overflow-hidden bg-gray-900 text-white">
           {/* Header */}
           <div className="border-b border-gray-700 p-4">

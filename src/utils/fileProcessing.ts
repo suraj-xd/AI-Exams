@@ -4,12 +4,6 @@ import pdfParse from 'pdf-parse';
 import type { NextApiRequest } from 'next';
 import { GoogleGenerativeAI } from "@google/generative-ai";
 
-if (!process.env.GEMINI_API_KEY) {
-  throw new Error("GEMINI_API_KEY is not set in environment variables");
-}
-
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-
 export interface ProcessedFile {
   text: string;
   fileType: string;
@@ -17,13 +11,15 @@ export interface ProcessedFile {
   error?: string;
 }
 
-export const parseFormData = async (req: NextApiRequest): Promise<{
-  fields: formidable.Fields;
-  files: formidable.Files;
-}> => {
+/**
+ * Parse multipart form data from request
+ */
+export async function parseMultipartForm(
+  req: NextApiRequest
+): Promise<{ fields: formidable.Fields; files: formidable.Files }> {
   const form = formidable({
-    maxFileSize: 10 * 1024 * 1024, // 10MB limit
-    allowEmptyFiles: false,
+    maxFileSize: 10 * 1024 * 1024, // 10MB
+    keepExtensions: true,
   });
 
   return new Promise((resolve, reject) => {
@@ -32,16 +28,24 @@ export const parseFormData = async (req: NextApiRequest): Promise<{
       else resolve({ fields, files });
     });
   });
-};
+}
 
 /**
  * Extract text from image using Gemini Vision
  */
 export async function extractTextFromImage(
   imageBuffer: Buffer,
-  mimeType: string
+  mimeType: string,
+  apiKey?: string
 ): Promise<string> {
   try {
+    const keyToUse = apiKey || process.env.GEMINI_API_KEY;
+    
+    if (!keyToUse) {
+      throw new Error("GEMINI_API_KEY is not available");
+    }
+
+    const genAI = new GoogleGenerativeAI(keyToUse);
     const model = genAI.getGenerativeModel({ model: "gemini-1.5-pro" });
     
     const prompt = "Extract and transcribe all text from this image. If it contains educational content like formulas, diagrams, or structured information, please preserve the formatting and include descriptions of visual elements that are relevant to understanding the content.";
@@ -66,7 +70,7 @@ export async function extractTextFromImage(
 /**
  * Extract text from PDF using pdf-parse
  */
-export async function extractTextFromPDF(pdfBuffer: Buffer): Promise<string> {
+export async function extractTextFromPDF(pdfBuffer: Buffer, apiKey?: string): Promise<string> {
   try {
     // Dynamic import for pdf-parse (only available in Node.js environment)
     const pdfParse = (await import('pdf-parse')).default;
@@ -77,6 +81,13 @@ export async function extractTextFromPDF(pdfBuffer: Buffer): Promise<string> {
     
     // Fallback: Use Gemini to process PDF if pdf-parse fails
     try {
+      const keyToUse = apiKey || process.env.GEMINI_API_KEY;
+      
+      if (!keyToUse) {
+        throw new Error("GEMINI_API_KEY is not available");
+      }
+
+      const genAI = new GoogleGenerativeAI(keyToUse);
       const model = genAI.getGenerativeModel({ model: "gemini-1.5-pro" });
       
       const prompt = "This is a PDF document. Extract all the text content from it, preserving structure and formatting where possible.";
@@ -100,57 +111,68 @@ export async function extractTextFromPDF(pdfBuffer: Buffer): Promise<string> {
 }
 
 /**
- * Process uploaded file and extract text
+ * Extract text from various file types
  */
-export async function processFile(
-  fileBuffer: Buffer,
-  filename: string,
-  mimeType: string
+export async function extractTextFromFile(
+  file: formidable.File,
+  apiKey?: string
 ): Promise<ProcessedFile> {
   try {
-    let text = '';
-    let fileType = 'unknown';
+    const fileBuffer = await fs.readFile(file.filepath);
+    const mimeType = file.mimetype || 'application/octet-stream';
+    const filename = file.originalFilename || 'unknown';
 
-    // Handle different file types
+    let extractedText = '';
+
     if (mimeType.startsWith('image/')) {
-      text = await extractTextFromImage(fileBuffer, mimeType);
-      fileType = 'image';
+      extractedText = await extractTextFromImage(fileBuffer, mimeType, apiKey);
     } else if (mimeType === 'application/pdf') {
-      text = await extractTextFromPDF(fileBuffer);
-      fileType = 'pdf';
-    } else if (mimeType.startsWith('text/') || mimeType === 'application/json') {
-      text = fileBuffer.toString('utf-8');
-      fileType = 'text';
-    } else if (mimeType === 'application/msword' || 
-               mimeType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
-      // For Word documents, try to extract text
-      // This is a simplified approach - in production, you'd use a proper Word parser
-      text = fileBuffer.toString('utf-8');
-      fileType = 'document';
+      extractedText = await extractTextFromPDF(fileBuffer, apiKey);
+    } else if (mimeType.startsWith('text/')) {
+      extractedText = fileBuffer.toString('utf-8');
     } else {
       throw new Error(`Unsupported file type: ${mimeType}`);
     }
 
-    // Clean and validate extracted text
-    text = text.trim();
-    if (!text || text.length < 10) {
-      throw new Error('No meaningful text could be extracted from the file');
-    }
-
     return {
-      text,
-      fileType,
+      text: extractedText,
+      fileType: mimeType,
       filename,
     };
   } catch (error) {
-    console.error(`Error processing file ${filename}:`, error);
+    console.error('Error processing file:', error);
     return {
       text: '',
-      fileType: 'error',
-      filename,
-      error: error instanceof Error ? error.message : 'Unknown processing error',
+      fileType: file.mimetype || 'unknown',
+      filename: file.originalFilename || 'unknown',
+      error: error instanceof Error ? error.message : 'Unknown error',
     };
   }
+}
+
+/**
+ * Process multiple files and extract text from each
+ */
+export async function processMultipleFiles(
+  files: formidable.File[],
+  apiKey?: string
+): Promise<ProcessedFile[]> {
+  const results = await Promise.allSettled(
+    files.map(file => extractTextFromFile(file, apiKey))
+  );
+
+  return results.map((result, index) => {
+    if (result.status === 'fulfilled') {
+      return result.value;
+    } else {
+      return {
+        text: '',
+        fileType: 'unknown',
+        filename: `file_${index}`,
+        error: result.reason instanceof Error ? result.reason.message : 'Processing failed',
+      };
+    }
+  });
 }
 
 /**

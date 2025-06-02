@@ -17,7 +17,14 @@ const config = {
   eslint: {
     ignoreDuringBuilds: true,
   },
-
+  images: {
+    remotePatterns: [
+      {
+        protocol: "https",
+        hostname: "i.ibb.co",
+      },
+    ],
+  },
   /**
    * If you are using `appDir` then you must comment the below `i18n` config out.
    *

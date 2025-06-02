@@ -42,12 +42,23 @@ export default async function handler(
     const validatedData = requestSchema.parse(req.body);
     const { topic, config, sessionId } = validatedData;
 
+    // Get API key from headers (user's local API key)
+    const userApiKey = req.headers['x-api-key'] as string;
+    
+    // Check if we have an API key (either user's or process.env)
+    if (!userApiKey && !process.env.GEMINI_API_KEY) {
+      return res.status(400).json({
+        success: false,
+        error: 'No API key available. Please provide your own Gemini API key.',
+      });
+    }
+
     // Generate a session ID if not provided
     const currentSessionId = sessionId || `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 
     console.log(`Generating questions for topic: "${topic}" with config:`, config);
 
-    const questionsData = await generateQuestions(topic, config);
+    const questionsData = await generateQuestions(topic, config, userApiKey);
 
     // Store the data with session ID for later retrieval
     // In a production app, you'd want to use a proper database
@@ -72,7 +83,7 @@ export default async function handler(
     if (error instanceof Error && error.message.includes('API key')) {
       return res.status(500).json({
         success: false,
-        error: 'AI service configuration error',
+        error: 'AI service configuration error. Please check your API key.',
       });
     }
 

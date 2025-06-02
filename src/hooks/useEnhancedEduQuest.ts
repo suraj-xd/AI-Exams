@@ -1,6 +1,7 @@
 import { useState, useCallback } from 'react';
 import axios, { AxiosError } from 'axios';
 import { API_ENDPOINTS, QUESTION_CONFIG } from '../config/api';
+import useCreditsStore from '../store/useCreditsStore';
 
 interface QuestionConfig {
   mcqs: number;
@@ -66,6 +67,13 @@ interface ApiError {
 export const useEnhancedEduQuest = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<ApiError | null>(null);
+  
+  const { 
+    decrementCredits, 
+    getApiKey, 
+    isUsingLocalKey,
+    credits 
+  } = useCreditsStore();
 
   // Enhanced error handling
   const handleApiError = useCallback((err: unknown): ApiError => {
@@ -111,7 +119,30 @@ export const useEnhancedEduQuest = () => {
     };
   }, []);
 
-  // API call wrapper with error handling
+  // Get request headers with API key if available
+  const getRequestHeaders = useCallback(() => {
+    const headers: Record<string, string> = {};
+    const localApiKey = getApiKey();
+    
+    if (localApiKey) {
+      headers['x-api-key'] = localApiKey;
+    }
+    
+    return headers;
+  }, [getApiKey]);
+
+  // Check credits before API call
+  const checkCreditsAndDeduct = useCallback((): boolean => {
+    // If using local API key, don't check credits
+    if (isUsingLocalKey()) {
+      return true;
+    }
+    
+    // Try to deduct credits (returns false if no credits available)
+    return decrementCredits();
+  }, [decrementCredits, isUsingLocalKey]);
+
+  // API call wrapper with error handling and credit management
   const apiCall = useCallback(async <T>(
     apiFunction: () => Promise<T>
   ): Promise<T | null> => {
@@ -136,8 +167,18 @@ export const useEnhancedEduQuest = () => {
     prompt?: string,
     config?: Partial<QuestionConfig>
   ): Promise<GenerationResult | null> => {
+    // Check credits before making API call
+    if (!checkCreditsAndDeduct()) {
+      setError({
+        code: 'NO_CREDITS',
+        message: 'You have 0 generations remaining. Please add your own API key to continue.',
+      });
+      return null;
+    }
+
     return apiCall(async () => {
       const finalConfig = { ...QUESTION_CONFIG.DEFAULT, ...config };
+      const headers = getRequestHeaders();
       
       // If we have files, use the multimodal endpoint
       if (files.length > 0) {
@@ -159,6 +200,7 @@ export const useEnhancedEduQuest = () => {
         const response = await axios.post(API_ENDPOINTS.GENERATE_WITH_CONTEXT, formData, {
           headers: {
             'Content-Type': 'multipart/form-data',
+            ...headers,
           },
           timeout: 60000, // 60 seconds for multimodal processing
         });
@@ -188,6 +230,8 @@ export const useEnhancedEduQuest = () => {
           topic: prompt,
           config: finalConfig,
           sessionId,
+        }, {
+          headers,
         });
         
         if (response.data.success && response.data.data) {
@@ -212,7 +256,7 @@ export const useEnhancedEduQuest = () => {
       
       throw new Error('No content provided');
     });
-  }, [apiCall]);
+  }, [apiCall, checkCreditsAndDeduct, getRequestHeaders]);
 
   // Upload single file
   const uploadFile = useCallback(async (
@@ -221,10 +265,12 @@ export const useEnhancedEduQuest = () => {
     return apiCall(async () => {
       const formData = new FormData();
       formData.append('file', file);
+      const headers = getRequestHeaders();
       
       const response = await axios.post(API_ENDPOINTS.UPLOAD, formData, {
         headers: {
           'Content-Type': 'multipart/form-data',
+          ...headers,
         },
       });
       
@@ -237,14 +283,18 @@ export const useEnhancedEduQuest = () => {
       
       throw new Error(response.data.error || 'Upload failed');
     });
-  }, [apiCall]);
+  }, [apiCall, getRequestHeaders]);
 
   // Analyze answers
   const analyzeAnswers = useCallback(async (
     data: AnalysisData
   ): Promise<string | null> => {
     return apiCall(async () => {
-      const response = await axios.post(API_ENDPOINTS.ANALYZE_ANSWERS, data);
+      const headers = getRequestHeaders();
+      
+      const response = await axios.post(API_ENDPOINTS.ANALYZE_ANSWERS, data, {
+        headers,
+      });
       
       if (response.data.success) {
         return response.data.data || response.data.feedback;
@@ -252,12 +302,16 @@ export const useEnhancedEduQuest = () => {
       
       throw new Error(response.data.error || 'Analysis failed');
     });
-  }, [apiCall]);
+  }, [apiCall, getRequestHeaders]);
 
   // Get random question
   const getRandomQuestion = useCallback(async (): Promise<string | null> => {
     return apiCall(async () => {
-      const response = await axios.get(API_ENDPOINTS.RANDOM_QUESTION);
+      const headers = getRequestHeaders();
+      
+      const response = await axios.get(API_ENDPOINTS.RANDOM_QUESTION, {
+        headers,
+      });
       
       if (response.data.success) {
         return response.data.data || response.data.question;
@@ -265,7 +319,7 @@ export const useEnhancedEduQuest = () => {
       
       throw new Error(response.data.error || 'Failed to fetch random question');
     });
-  }, [apiCall]);
+  }, [apiCall, getRequestHeaders]);
 
   // Clear error
   const clearError = useCallback(() => {
@@ -276,6 +330,8 @@ export const useEnhancedEduQuest = () => {
     // State
     loading,
     error,
+    credits,
+    isUsingLocalKey: isUsingLocalKey(),
     
     // Functions
     generateWithContext,

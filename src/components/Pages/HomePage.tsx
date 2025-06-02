@@ -2,9 +2,11 @@ import React, { useState, useEffect } from "react";
 import { BiGhost } from "react-icons/bi";
 import { GoHome } from "react-icons/go";
 import { IoTrophyOutline } from "react-icons/io5";
+import { FiSettings, FiShield, FiCreditCard } from "react-icons/fi";
 import Image from "next/image";
 import useLoadingStore from "~/store/useLoadingStore";
 import useJsonDataStore from "~/store/useJsonDataStore";
+import useCreditsStore from "~/store/useCreditsStore";
 import Link from "next/link";
 import SuccessRateMeter from "../SuccessRateMeter";
 import { LuDice6 } from "react-icons/lu";
@@ -18,17 +20,23 @@ import useSessionStore from "../../store/useSessionStore";
 import { FiSidebar, FiPlay, FiCheckCircle } from "react-icons/fi";
 import { useRouter } from "next/router";
 
-// Import the new minimal component
+// Import the new components
 import { EduQuestPrompt } from "../EduQuestPrompt";
 import PromptSuggestions from "../PromptSuggestions";
 import { HomeSpinner } from "../ui/home-spinner";
+import CreditsDialog from "../CreditsDialog";
+import SettingsDialog from "../SettingsDialog";
+import { ArrowSquareUpIcon, ArrowUpRightIcon } from "@phosphor-icons/react";
 
 const HomePage: React.FC = () => {
   const router = useRouter();
   const { activeTab, setActiveTab } = useActiveTabStore();
   const { isLoading } = useLoadingStore();
   const { jsonData } = useJsonDataStore();
+  const { credits, isUsingLocalKey } = useCreditsStore();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [showCreditsDialog, setShowCreditsDialog] = useState(false);
+  const [showSettingsDialog, setShowSettingsDialog] = useState(false);
 
   const { getRecentSessions } = useSessionStore();
 
@@ -41,11 +49,9 @@ const HomePage: React.FC = () => {
 
   return (
     <div className="mx-auto flex min-h-screen w-screen items-center justify-start bg-[#13151A] text-white">
-      {/* Session Sidebar */}
-
       {/* Sidebar */}
-      <div className="h-[100vh] w-[20%] bg-[#13151A]">
-        <div className="mx-4 mt-5 flex flex-col items-center justify-center space-y-4">
+      <div className="flex h-[100vh] w-[20%] flex-col justify-between bg-[#13151A]  ">
+        <div className="items-strt mx-4 mt-5 flex h-fit flex-1 flex-col justify-start space-y-1">
           <button
             onClick={() => setActiveTab("Home")}
             className={`${activeTab === "Home" ? "bg-[#383942] text-white" : "text-[#9A9A9C]"} mx-auto flex w-full items-center justify-start space-x-2 rounded-md px-4 py-2 hover:bg-[#383942] hover:text-white`}
@@ -72,6 +78,47 @@ const HomePage: React.FC = () => {
             onSessionSelect={handleSessionSelect}
           />
         </div>
+
+        {/* Bottom Section - Credits and Settings */}
+        <div className="mx-4 mb-5 space-y-3">
+          <Link href="/about">
+            <p className="flex items-center gap-1 text-sm text-gray-400">
+              About <ArrowUpRightIcon size={14} />
+            </p>
+          </Link>
+          {/* Credits Display */}
+          <div className="rounded-lg bg-[#383942] p-3">
+            <div className="mb-2 flex items-center justify-between">
+              <div className="flex items-center space-x-2 text-sm text-gray-300">
+                <FiCreditCard size={14} />
+                <span>Credits</span>
+              </div>
+              {isUsingLocalKey() && (
+                <div className="flex items-center space-x-1 text-xs text-green-400">
+                  <FiShield size={10} />
+                  <span>Local</span>
+                </div>
+              )}
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-lg font-bold text-white">
+                {isUsingLocalKey() ? "∞" : credits}
+              </span>
+              <span className="text-xs text-gray-400">
+                {isUsingLocalKey() ? "Unlimited" : "remaining"}
+              </span>
+            </div>
+          </div>
+
+          {/* Settings Button */}
+          <button
+            onClick={() => setShowSettingsDialog(true)}
+            className="flex w-full items-center justify-start space-x-2 rounded-md px-4 py-2 text-[#9A9A9C] transition-colors hover:bg-[#383942] hover:text-white"
+          >
+            <FiSettings />
+            <span>Settings</span>
+          </button>
+        </div>
       </div>
 
       {/* Right Side */}
@@ -79,10 +126,26 @@ const HomePage: React.FC = () => {
         <HomeContent
           recentSessions={recentSessions}
           onSessionSelect={handleSessionSelect}
+          onShowCreditsDialog={() => setShowCreditsDialog(true)}
         />
       )}
       {activeTab === "Arcade" && <Arcade />}
       {activeTab === "Achievements" && <Achievements />}
+
+      {/* Dialogs */}
+      <CreditsDialog
+        isOpen={showCreditsDialog}
+        onClose={() => setShowCreditsDialog(false)}
+        onApiKeySet={() => {
+          // Dialog will be closed automatically
+          toast.success("You can now generate unlimited questions!");
+        }}
+      />
+
+      <SettingsDialog
+        isOpen={showSettingsDialog}
+        onClose={() => setShowSettingsDialog(false)}
+      />
     </div>
   );
 };
@@ -90,9 +153,11 @@ const HomePage: React.FC = () => {
 function HomeContent({
   recentSessions,
   onSessionSelect,
+  onShowCreditsDialog,
 }: {
   recentSessions: any[];
   onSessionSelect: (sessionId: string) => void;
+  onShowCreditsDialog: () => void;
 }) {
   const router = useRouter();
   const { isLoading } = useLoadingStore();
@@ -170,7 +235,12 @@ function HomeContent({
         toast.error("Failed to create session. Please try again.");
       }
     } else if (error) {
-      toast.error(error.message || "Failed to generate questions");
+      // Check if it's a credits error
+      if (error.code === "NO_CREDITS") {
+        onShowCreditsDialog();
+      } else {
+        toast.error(error.message || "Failed to generate questions");
+      }
     }
   };
 
@@ -194,7 +264,7 @@ function HomeContent({
               className={`${(isLoading || loading) && "animate-pulse"}`}
             />
             <div>
-              <h1 className="text-2xl font-bold text-white">EduQuest AI</h1>
+              <h1 className="text-2xl font-bold text-white">AI Exams</h1>
               <p className="text-sm text-gray-400">
                 Generate intelligent questions from any content
               </p>
@@ -204,7 +274,7 @@ function HomeContent({
       </div>
 
       {/* Error Display */}
-      {error && (
+      {error && error.code !== "NO_CREDITS" && (
         <div className="mx-6 mb-6 rounded-lg border border-red-500/50 bg-red-900/50 p-4">
           <div className="flex items-start justify-between">
             <div>
@@ -220,6 +290,7 @@ function HomeContent({
           </div>
         </div>
       )}
+
       {/* Main Content - Centered and Minimal */}
       <div className="relative flex min-h-[calc(100vh-130px)] flex-col items-center justify-center overflow-hidden p-6">
         {!prompt && !loading && !jsonData && (
@@ -231,6 +302,7 @@ function HomeContent({
             />
           </div>
         )}
+
         {/* Results Display */}
         {jsonData && (
           <div className="mx-6 mb-6 rounded-lg border border-gray-600 bg-[#383942] p-6">
@@ -259,6 +331,7 @@ function HomeContent({
             )}
           </div>
         )}
+
         <div className="absolute bottom-4 left-0 right-0 z-10 mx-[10%]">
           <EduQuestPrompt
             value={prompt}
@@ -366,7 +439,12 @@ function Arcade() {
           src={"/RandomGame.svg"}
         />
         <div>
-          <h1 className="ml-5 text-xl font-bold">Random Question</h1>
+          <h1 className="ml-5 text-xl font-bold">
+            Random Question (Coming Soon)
+          </h1>
+          <p className="ml-5 text-sm text-gray-400">
+            Random questions on basis of your study and recent sessions
+          </p>
         </div>
       </div>
 

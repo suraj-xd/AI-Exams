@@ -7,6 +7,7 @@ import {
   QuestionSet 
 } from '../../utils/multimodal';
 import { ApiResponse } from '../../config/api';
+import { parseMultipartForm, processMultipleFiles } from '../../utils/fileProcessing';
 
 // Disable Next.js body parser for file uploads
 export const config = {
@@ -38,24 +39,6 @@ interface GenerateWithContextResponse extends ApiResponse<{
   extractedContent?: any[];
 }> {}
 
-const parseFormData = async (req: NextApiRequest): Promise<{
-  fields: formidable.Fields;
-  files: formidable.Files;
-}> => {
-  const form = formidable({
-    maxFileSize: 10 * 1024 * 1024, // 10MB
-    maxFiles: 5, // Allow multiple files
-    allowEmptyFiles: false,
-  });
-
-  return new Promise((resolve, reject) => {
-    form.parse(req, (err, fields, files) => {
-      if (err) reject(err);
-      else resolve({ fields, files });
-    });
-  });
-};
-
 export default async function handler(
   req: NextApiRequest,
   res: NextApiResponse<GenerateWithContextResponse>
@@ -71,62 +54,59 @@ export default async function handler(
   }
 
   try {
-    const { fields, files } = await parseFormData(req);
+    // Get API key from headers (user's local API key)
+    const userApiKey = req.headers['x-api-key'] as string;
     
-    // Parse fields
-    const prompt = Array.isArray(fields.prompt) ? fields.prompt[0] : fields.prompt;
-    const configStr = Array.isArray(fields.config) ? fields.config[0] : fields.config;
-    
-    let config = {
-      mcqs: 5,
-      fillInBlanks: 5,
-      trueFalse: 5,
-      shortType: 3,
-      longType: 2,
-    };
-
-    if (configStr) {
-      try {
-        const parsedConfig = JSON.parse(configStr);
-        config = { ...config, ...parsedConfig };
-      } catch (error) {
-        console.error('Error parsing config:', error);
-      }
+    // Check if we have an API key (either user's or process.env)
+    if (!userApiKey && !process.env.GEMINI_API_KEY) {
+      return res.status(400).json({
+        success: false,
+        error: {
+          code: 'NO_API_KEY',
+          message: 'No API key available. Please provide your own Gemini API key.'
+        }
+      });
     }
 
-    // Validate the parsed data
+    console.log('Processing multimodal generation request...');
+    console.log('Using user API key:', !!userApiKey);
+
+    // Parse multipart form data
+    const { fields, files } = await parseMultipartForm(req);
+    
+    // Extract and validate form data
+    const promptField = Array.isArray(fields.prompt) ? fields.prompt[0] : fields.prompt;
+    const configField = Array.isArray(fields.config) ? fields.config[0] : fields.config;
+    
+    let parsedConfig;
+    try {
+      parsedConfig = configField ? JSON.parse(configField) : {};
+    } catch (e) {
+      parsedConfig = {};
+    }
+
     const validatedData = requestSchema.parse({
-      prompt: prompt || undefined,
-      config,
+      prompt: promptField || '',
+      config: parsedConfig,
+    });
+
+    console.log('Validated request data:', {
+      prompt: validatedData.prompt?.slice(0, 50) + '...',
+      config: validatedData.config,
+      filesCount: Object.keys(files).length,
     });
 
     // Process uploaded files
-    const fileArray = Object.values(files).flat().filter(Boolean);
-    const processedFiles: Array<{
-      buffer: Buffer;
-      filename: string;
-      mimeType: string;
-    }> = [];
-
-    for (const file of fileArray) {
-      if (file && file.filepath) {
-        const fs = await import('fs/promises');
-        const buffer = await fs.readFile(file.filepath);
-        
-        processedFiles.push({
-          buffer,
-          filename: file.originalFilename || 'unnamed',
-          mimeType: file.mimetype || 'application/octet-stream',
-        });
-
-        // Clean up temp file
-        try {
-          await fs.unlink(file.filepath);
-        } catch (error) {
-          console.error('Failed to clean up temp file:', error);
-        }
+    let processedFiles: formidable.File[] = [];
+    if (files.files) {
+      if (Array.isArray(files.files)) {
+        processedFiles = files.files;
+      } else {
+        processedFiles = [files.files];
       }
     }
+
+    console.log(`Processing ${processedFiles.length} files...`);
 
     // Check if we have any content to process
     if (processedFiles.length === 0 && !validatedData.prompt) {
@@ -146,7 +126,7 @@ export default async function handler(
 
     // Preprocess files if any
     if (processedFiles.length > 0) {
-      const preprocessing = await preprocessMultimodalInput(processedFiles);
+      const preprocessing = await preprocessMultimodalInput(processedFiles, userApiKey);
       extractedContent = preprocessing.extractedContent;
       processedContext = {
         ...processedContext,
@@ -159,7 +139,8 @@ export default async function handler(
     const questions = await generateQuestionsWithContext(
       processedContext,
       validatedData.config,
-      validatedData.prompt
+      validatedData.prompt,
+      userApiKey
     );
 
     // Generate session ID
@@ -176,14 +157,14 @@ export default async function handler(
     });
 
   } catch (error) {
-    console.error('Error in generate-with-context:', error);
+    console.error('Multimodal generation error:', error);
     
     if (error instanceof z.ZodError) {
       return res.status(400).json({
         success: false,
         error: {
           code: 'VALIDATION_ERROR',
-          message: `Validation error: ${error.errors.map(e => e.message).join(', ')}`,
+          message: 'Request validation failed',
           details: error.errors,
         }
       });
@@ -193,8 +174,8 @@ export default async function handler(
       return res.status(500).json({
         success: false,
         error: {
-          code: 'AI_SERVICE_ERROR',
-          message: 'AI service configuration error',
+          code: 'API_KEY_ERROR',
+          message: 'AI service configuration error. Please check your API key.',
         }
       });
     }
@@ -202,9 +183,8 @@ export default async function handler(
     return res.status(500).json({
       success: false,
       error: {
-        code: 'INTERNAL_ERROR',
-        message: 'Failed to generate questions with context',
-        details: error instanceof Error ? error.message : 'Unknown error',
+        code: 'GENERATION_ERROR',
+        message: error instanceof Error ? error.message : 'Failed to generate questions with context',
       }
     });
   }
