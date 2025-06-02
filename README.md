@@ -35,5 +35,7 @@ Generate questions, simulate exams, play educational games, and level up — all
 * 🪲 Bug fixes & performance updates
 
 ---
-
+## UI / Design
+* All assets and images and generated with Chatgpt and Designed in Figma.
+  
 **AI Exams — Assess better. Learn smarter.**
