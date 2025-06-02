@@ -1,6 +1,3 @@
-# [Hackanova 3.0 EduQuest](https://youtu.be/5SUhkjQ1FRE?si=HJCwpqZ5VomsZiba) 👾
-
-
 ![OG Image](og-image.png)
 
 *Welcome to the official documentation for **Hackanova 2.0 EduQuest**, the innovative platform designed to revolutionize educational assessments through technology. Here, we dive into the features, drawbacks, and unique aspects of EduQuest, ensuring users can fully leverage its capabilities while being aware of its limitations.*
@@ -12,7 +9,7 @@ EduQuest kickstarts the journey of statement generation through various inputs i
 - **Prompt**: ✍️
 This process involves reading and analyzing photos or videos, allowing users to feed and edit prompts before submission.
 
-[Watch the Demo Video](https://youtu.be/5SUhkjQ1FRE?si=HJCwpqZ5VomsZiba)
+[Watch the Demo Video]([https://youtu.be/5SUhkjQ1FRE?si=HJCwpqZ5VomsZiba](https://drive.google.com/file/d/1M6qXOsYHIdFa4L0JmTk59A2r4n_9POU8/view?usp=sharing))
 
 ## 🎲 Features
 ### Question Generation
@@ -50,6 +47,3 @@ While EduQuest pushes the boundaries of educational technology, users may occasi
 - Model malfunctions.
 - Limitations in translating non-translatable words.
 EduQuest is committed to continuous improvement, addressing these challenges to provide an unparalleled educational experience.
-
----
-Embrace the future of education with **Hackanova 2.0 EduQuest** – where learning meets innovation.
