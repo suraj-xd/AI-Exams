@@ -1,4 +1,5 @@
 ![OG Image](og-image.png)
+![OG Image](og-image2.png)
 
 *Welcome to the official documentation for **Hackanova 2.0 EduQuest**, the innovative platform designed to revolutionize educational assessments through technology. Here, we dive into the features, drawbacks, and unique aspects of EduQuest, ensuring users can fully leverage its capabilities while being aware of its limitations.*
 
